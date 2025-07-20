@@ -1,30 +1,34 @@
 
 -- Create a function to execute arbitrary SQL queries
 CREATE OR REPLACE FUNCTION public.execute_sql(query_text TEXT)
-RETURNS TABLE(result JSONB)
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
     rec RECORD;
     result_array JSONB := '[]'::JSONB;
+    query_upper TEXT;
 BEGIN
-    -- For SELECT statements, return the results
-    IF UPPER(TRIM(query_text)) LIKE 'SELECT%' THEN
+    query_upper := UPPER(TRIM(query_text));
+    
+    -- For SELECT statements, return the results as a JSONB array
+    IF query_upper LIKE 'SELECT%' OR query_upper LIKE 'WITH%' THEN
         FOR rec IN EXECUTE query_text LOOP
             result_array := result_array || to_jsonb(rec);
         END LOOP;
-        RETURN QUERY SELECT result_array;
+        RETURN result_array;
     ELSE
         -- For other statements (INSERT, UPDATE, DELETE, CREATE, etc.), just execute
         EXECUTE query_text;
-        RETURN QUERY SELECT '{"message": "Query executed successfully"}'::JSONB;
+        RETURN '{"message": "Query executed successfully", "affected_rows": 0}'::JSONB;
     END IF;
 EXCEPTION WHEN OTHERS THEN
     -- Return error information
-    RETURN QUERY SELECT json_build_object(
+    RETURN json_build_object(
         'error', SQLERRM,
-        'detail', SQLSTATE
+        'detail', SQLSTATE,
+        'state', SQLSTATE
     )::JSONB;
 END;
 $$;

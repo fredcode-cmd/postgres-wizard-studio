@@ -94,8 +94,25 @@ const PostgreSQLIDE = () => {
             result.error = error.message;
             hasErrors = true;
           } else {
-            // Handle the result properly - it comes wrapped in an array
-            result.result = Array.isArray(data) ? data : [data];
+            // Handle the result properly - data is now a JSONB response
+            if (data) {
+              // Check if it's an error response
+              if (data.error) {
+                result.error = data.error;
+                hasErrors = true;
+              } else if (data.message) {
+                // Non-SELECT query result
+                result.result = [];
+              } else if (Array.isArray(data)) {
+                // SELECT query result - data is already the array of rows
+                result.result = data;
+              } else {
+                // Single object result
+                result.result = [data];
+              }
+            } else {
+              result.result = [];
+            }
           }
 
           results.push(result);
