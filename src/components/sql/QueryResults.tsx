@@ -145,40 +145,6 @@ export const QueryResults: React.FC<QueryResultsProps> = ({ results }) => {
       </div>
     );
   };
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <div className="p-4 text-sm text-muted-foreground border-t">
-              {result.length} row(s) returned
-            </div>
-          </div>
-        );
-      }
-    }
-
-    // Handle single values or other data types
-    if (typeof result === 'object' && result !== null) {
-      return (
-        <div className="p-4">
-          <pre className="bg-muted rounded-lg p-4 text-sm overflow-auto">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </div>
-      );
-    }
-
-    // Handle primitive values
-    return (
-      <div className="p-4">
-        <div className="bg-muted rounded-lg p-4 font-mono text-sm">
-          {String(result)}
-        </div>
-      </div>
-    );
-  };
 
   if (results.length === 0) {
     return (

@@ -1,12 +1,35 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database, Code, Terminal, History } from "lucide-react";
+import { Database, Code, Terminal, History, ArrowRight, Play } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/50">
+      {/* Header */}
+      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Database className="h-6 w-6 text-primary" />
+            <span className="font-bold text-xl">PostgreSQL Wizard Studio</span>
+          </div>
+          <nav className="hidden md:flex items-center gap-6">
+            <Link to="/ide" className="text-sm font-medium hover:text-primary transition-colors">
+              IDE
+            </Link>
+            <a 
+              href="https://github.com/Fredrickmureti/postgres-wizard-studio" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-sm font-medium hover:text-primary transition-colors"
+            >
+              GitHub
+            </a>
+          </nav>
+        </div>
+      </header>
+
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
           <div className="flex items-center justify-center mb-6">
@@ -89,13 +112,17 @@ const Index = () => {
           </Card>
         </div>
 
-        <div className="text-center">
+        <div className="text-center space-y-4">
           <Link to="/ide">
-            <Button size="lg" className="gap-2">
-              <Database className="h-5 w-5" />
+            <Button size="lg" className="gap-2 text-lg px-8 py-6 h-auto">
+              <Play className="h-5 w-5" />
               Launch PostgreSQL IDE
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
+          <p className="text-sm text-muted-foreground">
+            Get started in seconds • No installation required
+          </p>
         </div>
 
         <div className="mt-16 text-center">
