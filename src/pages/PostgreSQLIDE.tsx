@@ -5,6 +5,7 @@ import { QueryResults } from '@/components/sql/QueryResults';
 import { DatabaseExplorer } from '@/components/sql/DatabaseExplorer';
 import { QueryHistory } from '@/components/sql/QueryHistory';
 import { Terminal } from '@/components/sql/Terminal';
+import { Navigation } from '@/components/Navigation';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Play, Database, History, Terminal as TerminalIcon, Save, Download } from 'lucide-react';
@@ -28,6 +29,7 @@ const PostgreSQLIDE = () => {
   const [activeTab, setActiveTab] = useState('results');
   const [databases, setDatabases] = useState<any[]>([]);
   const [tables, setTables] = useState<any[]>([]);
+  const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -206,75 +208,82 @@ const PostgreSQLIDE = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      {/* Header */}
-      <div className="border-b p-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Database className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">PostgreSQL IDE</h1>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => executeQuery()}
-            disabled={isExecuting}
-            className="gap-2"
-          >
-            <Play className="h-4 w-4" />
-            {isExecuting ? 'Executing...' : 'Execute'}
-          </Button>
+    <div className="h-screen flex bg-background">
+      {/* Navigation Sidebar */}
+      <Navigation 
+        isCollapsed={isNavCollapsed} 
+        onToggle={() => setIsNavCollapsed(!isNavCollapsed)} 
+      />
+
+      {/* Main IDE Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="border-b p-4 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex items-center gap-2">
+            <Database className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-bold">PostgreSQL IDE</h1>
+          </div>
           
-          <Button variant="outline" onClick={saveQuery} className="gap-2">
-            <Save className="h-4 w-4" />
-            Save
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => executeQuery()}
+              disabled={isExecuting}
+              className="gap-2"
+            >
+              <Play className="h-4 w-4" />
+              {isExecuting ? 'Executing...' : 'Execute'}
+            </Button>
+            
+            <Button variant="outline" onClick={saveQuery} className="gap-2">
+              <Save className="h-4 w-4" />
+              Save
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        <ResizablePanelGroup direction="horizontal">
-          {/* Sidebar */}
-          <ResizablePanel defaultSize={20} minSize={15}>
-            <Tabs defaultValue="explorer" className="h-full">
-              <TabsList className="w-full">
-                <TabsTrigger value="explorer" className="flex-1">
-                  <Database className="h-4 w-4 mr-1" />
-                  Explorer
-                </TabsTrigger>
-                <TabsTrigger value="history" className="flex-1">
-                  <History className="h-4 w-4 mr-1" />
-                  History
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="explorer" className="h-full mt-0">
-                <DatabaseExplorer 
-                  tables={tables}
-                  onTableSelect={(tableName) => {
-                    setCurrentQuery(`SELECT * FROM ${tableName} LIMIT 100;`);
-                  }}
-                />
-              </TabsContent>
-              
-              <TabsContent value="history" className="h-full mt-0">
-                <QueryHistory 
-                  queries={queryResults}
-                  onQuerySelect={(query) => setCurrentQuery(query)}
-                  onClearHistory={clearHistory}
-                />
-              </TabsContent>
-            </Tabs>
-          </ResizablePanel>
+        {/* Main Content */}
+        <div className="flex-1 overflow-hidden">
+          <ResizablePanelGroup direction="horizontal">
+            {/* Sidebar */}
+            <ResizablePanel defaultSize={20} minSize={15} maxSize={35}>
+              <Tabs defaultValue="explorer" className="h-full">
+                <TabsList className="w-full">
+                  <TabsTrigger value="explorer" className="flex-1">
+                    <Database className="h-4 w-4 mr-1" />
+                    Explorer
+                  </TabsTrigger>
+                  <TabsTrigger value="history" className="flex-1">
+                    <History className="h-4 w-4 mr-1" />
+                    History
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="explorer" className="h-full mt-0">
+                  <DatabaseExplorer 
+                    tables={tables}
+                    onTableSelect={(tableName) => {
+                      setCurrentQuery(`SELECT * FROM ${tableName} LIMIT 100;`);
+                    }}
+                  />
+                </TabsContent>
+                
+                <TabsContent value="history" className="h-full mt-0">
+                  <QueryHistory 
+                    queries={queryResults}
+                    onQuerySelect={(query) => setCurrentQuery(query)}
+                    onClearHistory={clearHistory}
+                  />
+                </TabsContent>
+              </Tabs>
+            </ResizablePanel>
 
-          <ResizableHandle />
+            <ResizableHandle />
 
-          {/* Main Panel */}
-          <ResizablePanel defaultSize={80}>
-            <ResizablePanelGroup direction="vertical">
-              {/* Editor */}
-              <ResizablePanel defaultSize={50} minSize={30}>
-                <div className="h-full border-b">
+            {/* Main Panel */}
+            <ResizablePanel defaultSize={80}>
+              <div className="h-full flex flex-col">
+                {/* Editor */}
+                <div className="h-1/2 border-b">
                   <SQLEditor
                     value={currentQuery}
                     onChange={setCurrentQuery}
@@ -282,36 +291,39 @@ const PostgreSQLIDE = () => {
                     tables={tables.map(t => t.table_name)}
                   />
                 </div>
-              </ResizablePanel>
 
-              <ResizableHandle />
-
-              {/* Results */}
-              <ResizablePanel defaultSize={50} minSize={20}>
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-                  <TabsList>
-                    <TabsTrigger value="results">Results</TabsTrigger>
-                    <TabsTrigger value="terminal">
-                      <TerminalIcon className="h-4 w-4 mr-1" />
-                      Terminal
-                    </TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="results" className="h-full mt-0">
-                    <QueryResults results={queryResults} />
-                  </TabsContent>
-                  
-                  <TabsContent value="terminal" className="h-full mt-0">
-                    <Terminal 
-                      onExecute={handleTerminalExecute}
-                      onSchemaChange={loadDatabaseSchema}
-                    />
-                  </TabsContent>
-                </Tabs>
-              </ResizablePanel>
-            </ResizablePanelGroup>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+                {/* Bottom Panel with fixed tabs */}
+                <div className="h-1/2 flex flex-col">
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+                    <div className="border-b bg-muted/50">
+                      <TabsList className="h-auto p-1">
+                        <TabsTrigger value="results" className="gap-2">
+                          <Database className="h-4 w-4" />
+                          Results
+                        </TabsTrigger>
+                        <TabsTrigger value="terminal" className="gap-2">
+                          <TerminalIcon className="h-4 w-4" />
+                          Terminal
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
+                    
+                    <TabsContent value="results" className="flex-1 m-0 overflow-hidden">
+                      <QueryResults results={queryResults} />
+                    </TabsContent>
+                    
+                    <TabsContent value="terminal" className="flex-1 m-0 overflow-hidden">
+                      <Terminal 
+                        onExecute={handleTerminalExecute}
+                        onSchemaChange={loadDatabaseSchema}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
       </div>
     </div>
   );
