@@ -50,14 +50,16 @@ const PostgreSQLIDE = () => {
     }
   };
 
-  const executeQuery = async (query?: string) => {
+  const executeQuery = async (query?: string, showToast: boolean = true) => {
     const queryToExecute = query || currentQuery;
     if (!queryToExecute.trim()) {
-      toast({
-        title: "Empty Query",
-        description: "Please enter a SQL query to execute.",
-        variant: "destructive"
-      });
+      if (showToast) {
+        toast({
+          title: "Empty Query",
+          description: "Please enter a SQL query to execute.",
+          variant: "destructive"
+        });
+      }
       return;
     }
 
@@ -72,6 +74,7 @@ const PostgreSQLIDE = () => {
         .filter(q => q.length > 0);
 
       const results: QueryResult[] = [];
+      let hasErrors = false;
 
       for (const singleQuery of queries) {
         try {
@@ -89,12 +92,14 @@ const PostgreSQLIDE = () => {
 
           if (error) {
             result.error = error.message;
+            hasErrors = true;
           } else {
             result.result = data;
           }
 
           results.push(result);
         } catch (err: any) {
+          hasErrors = true;
           results.push({
             id: Date.now().toString() + Math.random(),
             query: singleQuery,
@@ -107,17 +112,25 @@ const PostgreSQLIDE = () => {
 
       setQueryResults(prev => [...results, ...prev]);
       
-      if (results.some(r => r.error)) {
-        toast({
-          title: "Query Error",
-          description: "Some queries failed to execute. Check the results panel.",
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Query Executed",
-          description: `${results.length} query(ies) executed successfully.`,
-        });
+      // Only show toast notifications for explicit user actions, not terminal commands
+      if (showToast) {
+        if (hasErrors) {
+          toast({
+            title: "Query Error",
+            description: "Some queries failed to execute. Check the results panel.",
+            variant: "destructive"
+          });
+        } else {
+          // Only show success toast for important operations
+          const lowerQuery = queryToExecute.toLowerCase();
+          if (lowerQuery.includes('create') || lowerQuery.includes('insert') || 
+              lowerQuery.includes('update') || lowerQuery.includes('delete')) {
+            toast({
+              title: "Query Executed",
+              description: `${results.length} query(ies) executed successfully.`,
+            });
+          }
+        }
       }
 
       // Refresh schema after potentially structure-changing queries
@@ -138,14 +151,25 @@ const PostgreSQLIDE = () => {
       
       setQueryResults(prev => [result, ...prev]);
       
-      toast({
-        title: "Execution Error",
-        description: error.message || 'Failed to execute query',
-        variant: "destructive"
-      });
+      if (showToast) {
+        toast({
+          title: "Execution Error",
+          description: error.message || 'Failed to execute query',
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsExecuting(false);
     }
+  };
+
+  const handleTerminalExecute = (query: string) => {
+    // Execute from terminal without showing toast notifications
+    executeQuery(query, false);
+  };
+
+  const clearHistory = () => {
+    setQueryResults([]);
   };
 
   const saveQuery = () => {
@@ -214,6 +238,7 @@ const PostgreSQLIDE = () => {
                 <QueryHistory 
                   queries={queryResults}
                   onQuerySelect={(query) => setCurrentQuery(query)}
+                  onClearHistory={clearHistory}
                 />
               </TabsContent>
             </Tabs>
@@ -254,7 +279,10 @@ const PostgreSQLIDE = () => {
                   </TabsContent>
                   
                   <TabsContent value="terminal" className="h-full mt-0">
-                    <Terminal onExecute={executeQuery} />
+                    <Terminal 
+                      onExecute={handleTerminalExecute}
+                      onSchemaChange={loadDatabaseSchema}
+                    />
                   </TabsContent>
                 </Tabs>
               </ResizablePanel>

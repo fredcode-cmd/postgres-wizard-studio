@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Terminal as TerminalIcon } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TerminalLine {
   id: string;
@@ -13,12 +14,13 @@ interface TerminalLine {
 
 interface TerminalProps {
   onExecute: (query: string) => void;
+  onSchemaChange: () => void;
 }
 
-export const Terminal: React.FC<TerminalProps> = ({ onExecute }) => {
+export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange }) => {
   const [lines, setLines] = useState<TerminalLine[]>([
     {
-      id: '0',
+      id: 'welcome',
       type: 'output',
       content: 'PostgreSQL Terminal - Type SQL commands and press Enter',
       timestamp: new Date()
@@ -39,7 +41,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute }) => {
 
   const addLine = (type: TerminalLine['type'], content: string) => {
     const newLine: TerminalLine = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random()}`,
       type,
       content,
       timestamp: new Date()
@@ -47,7 +49,91 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute }) => {
     setLines(prev => [...prev, newLine]);
   };
 
-  const handleCommand = (command: string) => {
+  const executeMetaCommand = async (command: string) => {
+    const cmd = command.toLowerCase().trim();
+    
+    switch (cmd) {
+      case '\\l':
+        try {
+          const { data, error } = await supabase
+            .rpc('execute_sql', { query_text: "SELECT datname as \"Database\" FROM pg_database WHERE datistemplate = false;" });
+          
+          if (error) {
+            addLine('error', `Error: ${error.message}`);
+          } else if (data && data[0]) {
+            addLine('output', 'List of databases:');
+            if (Array.isArray(data[0])) {
+              data[0].forEach((db: any) => {
+                addLine('output', `  ${db.Database}`);
+              });
+            }
+          }
+        } catch (err: any) {
+          addLine('error', `Error: ${err.message}`);
+        }
+        break;
+        
+      case '\\dt':
+        try {
+          const { data, error } = await supabase.rpc('get_table_info');
+          
+          if (error) {
+            addLine('error', `Error: ${error.message}`);
+          } else if (data && data.length > 0) {
+            addLine('output', 'List of relations:');
+            addLine('output', '  Schema | Name | Type | Owner');
+            addLine('output', '  -------|------|------|------');
+            data.forEach((table: any) => {
+              addLine('output', `  ${table.table_schema} | ${table.table_name} | ${table.table_type} | postgres`);
+            });
+          } else {
+            addLine('output', 'No tables found.');
+          }
+        } catch (err: any) {
+          addLine('error', `Error: ${err.message}`);
+        }
+        break;
+        
+      default:
+        if (cmd.startsWith('\\d ')) {
+          const tableName = cmd.substring(3).trim();
+          try {
+            const { data, error } = await supabase
+              .rpc('execute_sql', { 
+                query_text: `
+                  SELECT 
+                    column_name as "Column",
+                    data_type as "Type",
+                    is_nullable as "Nullable",
+                    column_default as "Default"
+                  FROM information_schema.columns 
+                  WHERE table_name = '${tableName}' 
+                  ORDER BY ordinal_position;
+                ` 
+              });
+            
+            if (error) {
+              addLine('error', `Error: ${error.message}`);
+            } else if (data && data[0] && Array.isArray(data[0]) && data[0].length > 0) {
+              addLine('output', `Table "${tableName}"`);
+              addLine('output', '  Column | Type | Nullable | Default');
+              addLine('output', '  -------|------|----------|--------');
+              data[0].forEach((col: any) => {
+                addLine('output', `  ${col.Column} | ${col.Type} | ${col.Nullable} | ${col.Default || ''}`);
+              });
+            } else {
+              addLine('error', `Table "${tableName}" does not exist.`);
+            }
+          } catch (err: any) {
+            addLine('error', `Error: ${err.message}`);
+          }
+        } else {
+          addLine('error', `Unknown meta-command: ${command}`);
+        }
+    }
+  };
+
+  const handleCommand = async (command: string) => {
     if (!command.trim()) return;
 
     // Add command to history
@@ -75,28 +161,31 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute }) => {
     }
 
     if (command.startsWith('\\')) {
-      // Handle PostgreSQL meta-commands
-      switch (command.toLowerCase()) {
-        case '\\l':
-          addLine('output', 'List of databases:');
-          addLine('output', '  postgres | owner | UTF8');
-          break;
-        case '\\dt':
-          addLine('output', 'List of relations:');
-          addLine('output', '  Schema | Name | Type | Owner');
-          break;
-        default:
-          addLine('error', `Unknown meta-command: ${command}`);
-      }
+      await executeMetaCommand(command);
       return;
     }
 
-    // Execute SQL command
+    // Execute SQL command silently (no toast)
     try {
-      onExecute(command);
-      addLine('output', `Query executed. Check Results tab for details.`);
-    } catch (error) {
-      addLine('error', `Error: ${error}`);
+      const { data, error } = await supabase.rpc('execute_sql', {
+        query_text: command
+      });
+
+      if (error) {
+        addLine('error', `Error: ${error.message}`);
+      } else {
+        addLine('output', `Query executed successfully.`);
+        
+        // Check if it's a schema-changing command
+        const lowerCommand = command.toLowerCase().trim();
+        if (lowerCommand.includes('create') || lowerCommand.includes('drop') || 
+            lowerCommand.includes('alter') || lowerCommand.includes('database')) {
+          // Trigger schema refresh
+          onSchemaChange();
+        }
+      }
+    } catch (error: any) {
+      addLine('error', `Error: ${error.message || 'Unknown error occurred'}`);
     }
   };
 
