@@ -56,14 +56,33 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
 
     const headers = Object.keys(data[0]);
     const maxWidths = headers.map(header => 
-      Math.max(header.length, ...data.map(row => String(row[header] || '').length))
+      Math.max(
+        header.length, 
+        ...data.map(row => {
+          const value = row[header];
+          if (value === null || value === undefined) return 4; // "NULL"
+          if (typeof value === 'object') return JSON.stringify(value).length;
+          return String(value).length;
+        })
+      )
     );
 
     const separator = '+-' + maxWidths.map(w => '-'.repeat(w)).join('-+-') + '-+';
     const headerRow = '| ' + headers.map((h, i) => h.padEnd(maxWidths[i])).join(' | ') + ' |';
     
     const rows = data.map(row => 
-      '| ' + headers.map((h, i) => String(row[h] || '').padEnd(maxWidths[i])).join(' | ') + ' |'
+      '| ' + headers.map((h, i) => {
+        const value = row[h];
+        let displayValue;
+        if (value === null || value === undefined) {
+          displayValue = 'NULL';
+        } else if (typeof value === 'object') {
+          displayValue = JSON.stringify(value);
+        } else {
+          displayValue = String(value);
+        }
+        return displayValue.padEnd(maxWidths[i]);
+      }).join(' | ') + ' |'
     );
 
     return [separator, headerRow, separator, ...rows, separator].join('\n');
@@ -80,11 +99,17 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
           
           if (error) {
             addLine('error', `Error: ${error.message}`);
-          } else if (data && Array.isArray(data) && data.length > 0) {
-            addLine('output', 'List of databases:');
-            const tableStr = renderTable(data);
-            if (tableStr) {
-              addLine('table', tableStr);
+          } else if (data) {
+            if (data.error) {
+              addLine('error', `Error: ${data.error}`);
+            } else if (Array.isArray(data) && data.length > 0) {
+              addLine('output', 'List of databases:');
+              const tableStr = renderTable(data);
+              if (tableStr) {
+                addLine('table', tableStr);
+              }
+            } else {
+              addLine('output', 'No databases found.');
             }
           }
         } catch (err: any) {
@@ -138,14 +163,18 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
             
             if (error) {
               addLine('error', `Error: ${error.message}`);
-            } else if (data && Array.isArray(data) && data.length > 0) {
-              addLine('output', `Table "${tableName}"`);
-              const tableStr = renderTable(data);
-              if (tableStr) {
-                addLine('table', tableStr);
+            } else if (data) {
+              if (data.error) {
+                addLine('error', `Error: ${data.error}`);
+              } else if (Array.isArray(data) && data.length > 0) {
+                addLine('output', `Table "${tableName}"`);
+                const tableStr = renderTable(data);
+                if (tableStr) {
+                  addLine('table', tableStr);
+                }
+              } else {
+                addLine('error', `Table "${tableName}" does not exist.`);
               }
-            } else {
-              addLine('error', `Table "${tableName}" does not exist.`);
             }
           } catch (err: any) {
             addLine('error', `Error: ${err.message}`);
@@ -196,9 +225,15 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
 
       if (error) {
         addLine('error', `Error: ${error.message}`);
-      } else {
-        // Show actual results in terminal
-        if (Array.isArray(data) && data.length > 0) {
+      } else if (data) {
+        // Check if it's an error response
+        if (data.error) {
+          addLine('error', `Error: ${data.error}`);
+        } else if (data.message) {
+          // Non-SELECT query result
+          addLine('output', data.message);
+        } else if (Array.isArray(data) && data.length > 0) {
+          // SELECT query result - show table
           const tableStr = renderTable(data);
           if (tableStr) {
             addLine('table', tableStr);

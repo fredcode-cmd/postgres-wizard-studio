@@ -96,8 +96,55 @@ export const QueryResults: React.FC<QueryResultsProps> = ({ results }) => {
                       <TableCell key={cellIndex} className="font-mono text-sm">
                         {row[header] === null || row[header] === undefined 
                           ? <span className="text-muted-foreground italic">NULL</span>
-                          : String(row[header])
+                          : typeof row[header] === 'object' 
+                            ? JSON.stringify(row[header])
+                            : String(row[header])
                         }
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="p-4 text-sm text-muted-foreground border-t">
+              {result.length} row(s) returned
+            </div>
+          </div>
+        );
+      } else {
+        // Array of primitive values
+        return (
+          <div className="p-4">
+            <div className="bg-muted rounded-lg p-4 font-mono text-sm">
+              {result.map((item, index) => (
+                <div key={index}>{String(item)}</div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // Handle single values or other data types
+    if (typeof result === 'object' && result !== null) {
+      return (
+        <div className="p-4">
+          <pre className="bg-muted rounded-lg p-4 text-sm overflow-auto">
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        </div>
+      );
+    }
+
+    // Handle primitive values
+    return (
+      <div className="p-4">
+        <div className="bg-muted rounded-lg p-4 font-mono text-sm">
+          {String(result)}
+        </div>
+      </div>
+    );
+  };
                       </TableCell>
                     ))}
                   </TableRow>
