@@ -7,8 +7,9 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface TerminalLine {
   id: string;
-  type: 'command' | 'output' | 'error';
+  type: 'command' | 'output' | 'error' | 'table';
   content: string;
+  data?: any[];
   timestamp: Date;
 }
 
@@ -22,7 +23,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
     {
       id: 'welcome',
       type: 'output',
-      content: 'PostgreSQL Terminal - Type SQL commands and press Enter',
+      content: 'PostgreSQL Terminal - Type SQL commands and press Enter\nAvailable meta-commands: \\l (list databases), \\dt (list tables), \\d <table> (describe table)',
       timestamp: new Date()
     }
   ]);
@@ -39,14 +40,33 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
     }
   }, [lines]);
 
-  const addLine = (type: TerminalLine['type'], content: string) => {
+  const addLine = (type: TerminalLine['type'], content: string, data?: any[]) => {
     const newLine: TerminalLine = {
       id: `${Date.now()}-${Math.random()}`,
       type,
       content,
+      data,
       timestamp: new Date()
     };
     setLines(prev => [...prev, newLine]);
+  };
+
+  const renderTable = (data: any[]) => {
+    if (!data || data.length === 0) return null;
+
+    const headers = Object.keys(data[0]);
+    const maxWidths = headers.map(header => 
+      Math.max(header.length, ...data.map(row => String(row[header] || '').length))
+    );
+
+    const separator = '+-' + maxWidths.map(w => '-'.repeat(w)).join('-+-') + '-+';
+    const headerRow = '| ' + headers.map((h, i) => h.padEnd(maxWidths[i])).join(' | ') + ' |';
+    
+    const rows = data.map(row => 
+      '| ' + headers.map((h, i) => String(row[h] || '').padEnd(maxWidths[i])).join(' | ') + ' |'
+    );
+
+    return [separator, headerRow, separator, ...rows, separator].join('\n');
   };
 
   const executeMetaCommand = async (command: string) => {
@@ -56,16 +76,15 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
       case '\\l':
         try {
           const { data, error } = await supabase
-            .rpc('execute_sql', { query_text: "SELECT datname as \"Database\" FROM pg_database WHERE datistemplate = false;" });
+            .rpc('execute_sql', { query_text: "SELECT datname as \"Database\" FROM pg_database WHERE datistemplate = false ORDER BY datname;" });
           
           if (error) {
             addLine('error', `Error: ${error.message}`);
-          } else if (data && data[0]) {
+          } else if (data && Array.isArray(data) && data.length > 0) {
             addLine('output', 'List of databases:');
-            if (Array.isArray(data[0])) {
-              data[0].forEach((db: any) => {
-                addLine('output', `  ${db.Database}`);
-              });
+            const tableStr = renderTable(data);
+            if (tableStr) {
+              addLine('table', tableStr);
             }
           }
         } catch (err: any) {
@@ -81,11 +100,16 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
             addLine('error', `Error: ${error.message}`);
           } else if (data && data.length > 0) {
             addLine('output', 'List of relations:');
-            addLine('output', '  Schema | Name | Type | Owner');
-            addLine('output', '  -------|------|------|------');
-            data.forEach((table: any) => {
-              addLine('output', `  ${table.table_schema} | ${table.table_name} | ${table.table_type} | postgres`);
-            });
+            const tableData = data.map(table => ({
+              Schema: table.table_schema,
+              Name: table.table_name,
+              Type: table.table_type,
+              Owner: 'postgres'
+            }));
+            const tableStr = renderTable(tableData);
+            if (tableStr) {
+              addLine('table', tableStr);
+            }
           } else {
             addLine('output', 'No tables found.');
           }
@@ -114,13 +138,12 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
             
             if (error) {
               addLine('error', `Error: ${error.message}`);
-            } else if (data && data[0] && Array.isArray(data[0]) && data[0].length > 0) {
+            } else if (data && Array.isArray(data) && data.length > 0) {
               addLine('output', `Table "${tableName}"`);
-              addLine('output', '  Column | Type | Nullable | Default');
-              addLine('output', '  -------|------|----------|--------');
-              data[0].forEach((col: any) => {
-                addLine('output', `  ${col.Column} | ${col.Type} | ${col.Nullable} | ${col.Default || ''}`);
-              });
+              const tableStr = renderTable(data);
+              if (tableStr) {
+                addLine('table', tableStr);
+              }
             } else {
               addLine('error', `Table "${tableName}" does not exist.`);
             }
@@ -129,6 +152,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
           }
         } else {
           addLine('error', `Unknown meta-command: ${command}`);
+          addLine('output', 'Available commands:\n  \\l       - List databases\n  \\dt      - List tables\n  \\d table - Describe table');
         }
     }
   };
@@ -145,18 +169,17 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
 
     // Handle special terminal commands
     if (command.toLowerCase() === 'clear') {
-      setLines([]);
+      setLines([{
+        id: 'welcome-after-clear',
+        type: 'output',
+        content: 'PostgreSQL Terminal - Type SQL commands and press Enter\nAvailable meta-commands: \\l (list databases), \\dt (list tables), \\d <table> (describe table)',
+        timestamp: new Date()
+      }]);
       return;
     }
 
     if (command.toLowerCase() === 'help') {
-      addLine('output', 'Available commands:');
-      addLine('output', '  clear    - Clear the terminal');
-      addLine('output', '  help     - Show this help message');
-      addLine('output', '  \\l       - List databases');
-      addLine('output', '  \\dt      - List tables');
-      addLine('output', '  \\d table - Describe table');
-      addLine('output', '  Any SQL command will be executed');
+      addLine('output', 'Available commands:\n  clear    - Clear the terminal\n  help     - Show this help message\n  \\l       - List databases\n  \\dt      - List tables\n  \\d table - Describe table\n  Any SQL command will be executed');
       return;
     }
 
@@ -165,7 +188,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
       return;
     }
 
-    // Execute SQL command silently (no toast)
+    // Execute SQL command and show results in terminal
     try {
       const { data, error } = await supabase.rpc('execute_sql', {
         query_text: command
@@ -174,7 +197,16 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
       if (error) {
         addLine('error', `Error: ${error.message}`);
       } else {
-        addLine('output', `Query executed successfully.`);
+        // Show actual results in terminal
+        if (Array.isArray(data) && data.length > 0) {
+          const tableStr = renderTable(data);
+          if (tableStr) {
+            addLine('table', tableStr);
+          }
+          addLine('output', `(${data.length} row${data.length !== 1 ? 's' : ''})`);
+        } else {
+          addLine('output', 'Query executed successfully.');
+        }
         
         // Check if it's a schema-changing command
         const lowerCommand = command.toLowerCase().trim();
@@ -230,17 +262,26 @@ export const Terminal: React.FC<TerminalProps> = ({ onExecute, onSchemaChange })
         <ScrollArea className="h-full" ref={scrollRef}>
           <div className="p-4 space-y-1">
             {lines.map((line) => (
-              <div
-                key={line.id}
-                className={`text-sm ${
-                  line.type === 'command'
-                    ? 'text-yellow-400'
-                    : line.type === 'error'
-                    ? 'text-red-400'
-                    : 'text-green-400'
-                }`}
-              >
-                {line.content}
+              <div key={line.id}>
+                <div
+                  className={`text-sm ${
+                    line.type === 'command'
+                      ? 'text-yellow-400'
+                      : line.type === 'error'
+                      ? 'text-red-400'
+                      : line.type === 'table'
+                      ? 'text-cyan-400'
+                      : 'text-green-400'
+                  }`}
+                >
+                  {line.type === 'table' ? (
+                    <pre className="whitespace-pre font-mono text-xs leading-tight">
+                      {line.content}
+                    </pre>
+                  ) : (
+                    <pre className="whitespace-pre-wrap">{line.content}</pre>
+                  )}
+                </div>
               </div>
             ))}
           </div>

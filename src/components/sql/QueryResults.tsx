@@ -6,6 +6,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CheckCircle, XCircle, Clock, Download, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface QueryResult {
   id: string;
@@ -57,6 +65,72 @@ export const QueryResults: React.FC<QueryResultsProps> = ({ results }) => {
     a.download = `query_result_${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const renderResultData = (result: any) => {
+    // Handle different types of results
+    if (Array.isArray(result)) {
+      if (result.length === 0) {
+        return <div className="p-4 text-center text-muted-foreground">No data returned</div>;
+      }
+
+      // Check if it's an array of objects (table data)
+      if (typeof result[0] === 'object' && result[0] !== null) {
+        const headers = Object.keys(result[0]);
+        return (
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {headers.map((header) => (
+                    <TableHead key={header} className="font-semibold">
+                      {header}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {result.map((row, index) => (
+                  <TableRow key={index}>
+                    {headers.map((header, cellIndex) => (
+                      <TableCell key={cellIndex} className="font-mono text-sm">
+                        {row[header] === null || row[header] === undefined 
+                          ? <span className="text-muted-foreground italic">NULL</span>
+                          : String(row[header])
+                        }
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="p-4 text-sm text-muted-foreground border-t">
+              {result.length} row(s) returned
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // Handle single values or other data types
+    if (typeof result === 'object' && result !== null) {
+      return (
+        <div className="p-4">
+          <pre className="bg-muted rounded-lg p-4 text-sm overflow-auto">
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        </div>
+      );
+    }
+
+    // Handle primitive values
+    return (
+      <div className="p-4">
+        <div className="bg-muted rounded-lg p-4 font-mono text-sm">
+          {String(result)}
+        </div>
+      </div>
+    );
   };
 
   if (results.length === 0) {
@@ -181,39 +255,8 @@ export const QueryResults: React.FC<QueryResultsProps> = ({ results }) => {
                           </pre>
                         </div>
                       </div>
-                    ) : selectedResult.result && selectedResult.result.length > 0 ? (
-                      <div className="p-4">
-                        <div className="border rounded-lg overflow-hidden">
-                          <table className="w-full">
-                            <thead className="bg-muted">
-                              <tr>
-                                {Object.keys(selectedResult.result[0]).map((header) => (
-                                  <th key={header} className="text-left p-3 font-semibold">
-                                    {header}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedResult.result.map((row, index) => (
-                                <tr key={index} className="border-t hover:bg-muted/50">
-                                  {Object.values(row).map((value, cellIndex) => (
-                                    <td key={cellIndex} className="p-3 font-mono text-sm">
-                                      {value === null || value === undefined 
-                                        ? <span className="text-muted-foreground italic">NULL</span>
-                                        : String(value)
-                                      }
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="mt-4 text-sm text-muted-foreground">
-                          {selectedResult.result.length} row(s) returned
-                        </div>
-                      </div>
+                    ) : selectedResult.result ? (
+                      renderResultData(selectedResult.result)
                     ) : (
                       <div className="p-4 text-center text-muted-foreground">
                         Query executed successfully but returned no data

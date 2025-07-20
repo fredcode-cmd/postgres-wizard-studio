@@ -25,7 +25,7 @@ const PostgreSQLIDE = () => {
   const [currentQuery, setCurrentQuery] = useState('-- Welcome to PostgreSQL IDE\n-- Start typing your SQL queries here\n\nSELECT version();');
   const [queryResults, setQueryResults] = useState<QueryResult[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [activeTab, setActiveTab] = useState('editor');
+  const [activeTab, setActiveTab] = useState('results');
   const [databases, setDatabases] = useState<any[]>([]);
   const [tables, setTables] = useState<any[]>([]);
   const { toast } = useToast();
@@ -94,7 +94,8 @@ const PostgreSQLIDE = () => {
             result.error = error.message;
             hasErrors = true;
           } else {
-            result.result = data;
+            // Handle the result properly - it comes wrapped in an array
+            result.result = Array.isArray(data) ? data : [data];
           }
 
           results.push(result);
@@ -111,6 +112,11 @@ const PostgreSQLIDE = () => {
       }
 
       setQueryResults(prev => [...results, ...prev]);
+      
+      // Switch to results tab when query is executed from editor
+      if (showToast) {
+        setActiveTab('results');
+      }
       
       // Only show toast notifications for explicit user actions, not terminal commands
       if (showToast) {
@@ -250,7 +256,7 @@ const PostgreSQLIDE = () => {
           <ResizablePanel defaultSize={80}>
             <ResizablePanelGroup direction="vertical">
               {/* Editor */}
-              <ResizablePanel defaultSize={60} minSize={30}>
+              <ResizablePanel defaultSize={50} minSize={30}>
                 <div className="h-full border-b">
                   <SQLEditor
                     value={currentQuery}
@@ -264,7 +270,7 @@ const PostgreSQLIDE = () => {
               <ResizableHandle />
 
               {/* Results */}
-              <ResizablePanel defaultSize={40} minSize={20}>
+              <ResizablePanel defaultSize={50} minSize={20}>
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                   <TabsList>
                     <TabsTrigger value="results">Results</TabsTrigger>
